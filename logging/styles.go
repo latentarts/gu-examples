@@ -1,0 +1,98 @@
+package main
+
+import "github.com/latentart/gu/el"
+
+func Styles() el.Node {
+	return el.Tag("style", el.Text(`
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            line-height: 1.6;
+        }
+        .app {
+            max-width: 640px;
+            margin: 0 auto;
+            padding: 3rem 2rem;
+        }
+        h1 {
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+            color: #f1f5f9;
+        }
+        .subtitle {
+            color: #94a3b8;
+            font-size: 0.875rem;
+            margin-bottom: 2.5rem;
+        }
+        .section {
+            margin-bottom: 2rem;
+            padding: 1.5rem;
+            background: #1e293b;
+            border-radius: 0.75rem;
+            border: 1px solid #334155;
+        }
+        .section h2 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+            color: #f1f5f9;
+        }
+        .desc {
+            font-size: 0.8rem;
+            color: #94a3b8;
+            margin-bottom: 1rem;
+        }
+        .buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.15s, transform 0.1s;
+            color: #fff;
+        }
+        .btn:hover { opacity: 0.85; }
+        .btn:active { transform: scale(0.97); }
+        .btn.debug { background: #6b7280; }
+        .btn.info  { background: #3b82f6; }
+        .btn.warn  { background: #f59e0b; color: #1e293b; }
+        .btn.error { background: #ef4444; }
+        .level-row {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .level-select {
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.5rem;
+            border: 1px solid #475569;
+            background: #334155;
+            color: #e2e8f0;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            outline: none;
+        }
+        .level-select:focus { border-color: #3b82f6; }
+        .level-status {
+            font-size: 0.8rem;
+            color: #64748b;
+            font-family: ui-monospace, monospace;
+        }
+        .counter {
+            margin-top: 2rem;
+            text-align: center;
+            font-size: 0.85rem;
+            color: #64748b;
+        }
+	`))
+}
