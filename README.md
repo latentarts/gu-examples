@@ -25,6 +25,8 @@ The following examples demonstrate various technical aspects and integration cap
     *   **Theming:** Showcases the built-in `theme` system for dynamic light/dark mode switching.
     *   **Conditional Rendering:** Uses `el.Show` for declarative visibility toggling.
 
+[![Watch demo](./assets/counter.png)](./assets/counter.mp4)
+
 ### 2. DuckDB Explorer (`/duckdb`)
 *   **Purpose:** An in-browser SQL explorer powered by DuckDB WASM.
 *   **Technical Highlights:**
@@ -39,6 +41,8 @@ The following examples demonstrate various technical aspects and integration cap
     *   **Debug Console:** Integration with the `gu` debug console for real-time WASM observability.
     *   **Stack Traces:** Demonstrates capturing and displaying meaningful Go stack traces in the browser.
 
+[![Watch demo](./assets/logging.png)](./assets/logging.mp4)
+
 ### 4. Node Graph (`/nodegraph`)
 *   **Purpose:** A visual, interactive node-based graph editor.
 *   **Technical Highlights:**
@@ -46,11 +50,15 @@ The following examples demonstrate various technical aspects and integration cap
     *   **SVG Integration:** Dynamic rendering of connection lines using SVG elements.
     *   **Coordinate Mapping:** Converting between screen space and world space in a reactive environment.
 
+[![Watch demo](./assets/nodegraph.png)](./assets/nodegraph.mp4)
+
 ### 5. OpenAI Chat (`/openai-chat`)
 *   **Purpose:** A streaming chat interface for OpenAI.
 *   **Technical Highlights:**
     *   **Streaming API:** Handling Server-Sent Events (SSE) and partial updates reactively.
     *   **History Management:** Managing complex nested state for chat messages.
+
+[![Watch demo](./assets/openai-chat.png)](./assets/openai-chat.mp4)
 
 ### 6. Reporting Dashboard (`/reporting`)
 *   **Purpose:** A data-heavy dashboard with tables and file uploads.
@@ -58,11 +66,15 @@ The following examples demonstrate various technical aspects and integration cap
     *   **Table Patterns:** Demonstrates efficient rendering of large datasets in tables.
     *   **File API:** Handling browser file uploads (`input[type=file]`) via Go/WASM.
 
+[![Watch demo](./assets/reporting.png)](./assets/reporting.mp4)
+
 ### 7. shadcn/ui Inspired Components (`/shadcn`)
 *   **Purpose:** Implementation of modern UI components (Buttons, Cards, Inputs).
 *   **Technical Highlights:**
     *   **Component Composition:** Building reusable UI primitives using `gu`'s functional approach.
     *   **Styling Patterns:** Combining utility-first CSS with declarative Go component props.
+
+[![Watch demo](./assets/shadcn.png)](./assets/shadcn.mp4)
 
 ### 8. Stocks Dashboard (`/stocks`)
 *   **Purpose:** Real-time (simulated) financial data visualization.
@@ -70,16 +82,22 @@ The following examples demonstrate various technical aspects and integration cap
     *   **Charting:** Integrating with canvas or SVG for high-frequency updates.
     *   **Periodic Updates:** Using timers to update reactive signals and trigger efficient DOM diffing.
 
+[![Watch demo](./assets/stocks.png)](./assets/stocks.mp4)
+
 ### 9. Tailwind CSS Integration (`/tailwind`)
 *   **Purpose:** Showcases seamless use of Tailwind CSS with `gu`.
 *   **Technical Highlights:**
     *   **Class Management:** Using `el.Class` and `el.DynClass` to apply utility styles reactively.
+
+[![Watch demo](./assets/tailwindcss.png)](./assets/tailwindcss.mp4)
 
 ### 10. WebGPU Triangle (`/webgpu`)
 *   **Purpose:** Low-level 3D graphics rendering.
 *   **Technical Highlights:**
     *   **Modern Browser APIs:** Direct interop with the WebGPU API for high-performance graphics.
     *   **Frame Loops:** Managing animation frames (`requestAnimationFrame`) within the Go lifecycle.
+
+[![Watch demo](./assets/webgpu.png)](./assets/webgpu.mp4)
 
 ### 11. WebLLM Chat (`/webllm`)
 *   **Purpose:** Fully local LLM chat running in the browser.
