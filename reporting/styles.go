@@ -2,55 +2,9 @@ package main
 
 import (
 	"github.com/latentart/gu/el"
-	"github.com/latentart/gu/reactive"
 )
 
-func App() el.Node {
-	// Use version signal for non-comparable slices
-	columnsVer, setColumnsVer := reactive.NewSignal(0)
-	var columns []string
-	setColumns := func(c []string) {
-		columns = c
-		setColumnsVer(columnsVer() + 1)
-	}
-
-	rowsVer, setRowsVer := reactive.NewSignal(0)
-	var rows [][]string
-	setRows := func(r [][]string) {
-		rows = r
-		setRowsVer(rowsVer() + 1)
-	}
-
-	foundCount, setFoundCount := reactive.NewSignal(0)
-
-	getRowCount := func() int {
-		f := foundCount()
-		r := len(rows)
-		if f > r {
-			return f
-		}
-		return r
-	}
-
-	return el.Div(
-		el.Class("app"),
-		GlobalStyles(),
-		el.H1(el.Text("Minimalist Reporter")),
-		Uploader(setColumns, setRows, setFoundCount, getRowCount),
-		el.Show(func() bool {
-			_ = columnsVer()
-			return len(columns) > 0
-		},
-			Table(
-				func() []string { _ = columnsVer(); return columns },
-				setColumns,
-				func() [][]string { _ = rowsVer(); return rows },
-				setRows,
-			),
-		),
-	)
-}
-
+// GlobalStyles returns the global CSS for the reporting application.
 func GlobalStyles() el.Node {
 	css := `
 		body {

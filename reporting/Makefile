@@ -2,7 +2,11 @@ GOROOT     ?= $(shell go env GOROOT)
 WASM_EXEC  := $(firstword $(wildcard $(GOROOT)/lib/wasm/wasm_exec.js $(GOROOT)/misc/wasm/wasm_exec.js))
 DIST       := dist
 
-.PHONY: build tinygo serve tinygo-serve clean
+.PHONY: build tinygo serve tinygo-serve clean test
+
+test:
+	@echo "Running WASM tests..."
+	PATH=$(PATH):$(GOROOT)/lib/wasm GOOS=js GOARCH=wasm go test ./...
 
 build:
 	go mod tidy

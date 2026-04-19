@@ -1,4 +1,4 @@
-package main
+package components
 
 import (
 	"bytes"
@@ -10,19 +10,21 @@ import (
 	"github.com/latentart/gu/dom"
 	"github.com/latentart/gu/el"
 	"github.com/latentart/gu/jsutil"
+	"github.com/latentarts/gu-examples/reporting/state"
 )
 
-func Uploader(setCols func([]string), setRows func([][]string), setFoundCount func(int), rowCount func() int) el.Node {
+// Uploader component handles CSV file selection and parsing.
+func Uploader(s *state.ReportingState) el.Node {
 	return el.Div(
 		el.Class("uploader"),
 		el.P(el.Text("Drop a CSV file here or click to upload")),
-		el.Show(func() bool { return rowCount() > 0 },
+		el.Show(func() bool { return s.GetRowCount() > 0 },
 			el.P(
 				el.Style("color", "#38bdf8"),
 				el.Style("font-weight", "500"),
 				el.Style("margin-top", "0.5rem"),
 				el.DynText(func() string {
-					return fmt.Sprintf("✓ %s records loaded", formatCount(rowCount()))
+					return fmt.Sprintf("✓ %s records loaded", state.FormatCount(s.GetRowCount()))
 				}),
 			),
 		),
@@ -66,7 +68,7 @@ func Uploader(setCols func([]string), setRows func([][]string), setFoundCount fu
 
 					if count > 0 {
 						// Exclude header from the shown record count
-						setFoundCount(count - 1)
+						s.SetFoundCount(count - 1)
 					}
 
 					// 2. DATA PASS: Parse with pre-allocated slice
@@ -81,35 +83,16 @@ func Uploader(setCols func([]string), setRows func([][]string), setFoundCount fu
 							jsutil.LogError("failed to parse CSV: %v", err)
 							return
 						}
-						// record slice is reused by csv.Reader ONLY if ReuseRecord is true.
-						// Here it's false, so each record is a fresh allocation, safe to store.
 						records = append(records, record)
 					}
 
 					if len(records) > 0 {
-						setCols(records[0])
-						setRows(records[1:])
+						s.SetColumns(records[0])
+						s.SetRows(records[1:])
+						s.SetSortCol(-1) // Reset sort on new data
 					}
 				}()
 			}),
 		),
 	)
-}
-
-func formatCount(n int) string {
-	s := fmt.Sprintf("%d", n)
-	if len(s) <= 3 {
-		return s
-	}
-	var res []byte
-	for i, j := len(s)-1, 0; i >= 0; i, j = i-1, j+1 {
-		if j > 0 && j%3 == 0 {
-			res = append(res, ',')
-		}
-		res = append(res, s[i])
-	}
-	for i, j := 0, len(res)-1; i < j; i, j = i+1, j-1 {
-		res[i], res[j] = res[j], res[i]
-	}
-	return string(res)
 }

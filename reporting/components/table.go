@@ -1,4 +1,4 @@
-package main
+package components
 
 import (
 	"sort"
@@ -6,11 +6,11 @@ import (
 	"github.com/latentart/gu/dom"
 	"github.com/latentart/gu/el"
 	"github.com/latentart/gu/reactive"
+	"github.com/latentarts/gu-examples/reporting/state"
 )
 
-func Table(columns func() []string, setColumns func([]string), rows func() [][]string, setRows func([][]string)) el.Node {
-	sortCol, setSortCol := reactive.NewSignal(-1)
-	sortAsc, setSortAsc := reactive.NewSignal(true)
+// Table component renders a reactive, sortable, and virtualized data table.
+func Table(s *state.ReportingState) el.Node {
 	visibleCount, setVisibleCount := reactive.NewSignal(50)
 	draggedIdx, setDraggedIdx := reactive.NewSignal(-1)
 
@@ -22,9 +22,9 @@ func Table(columns func() []string, setColumns func([]string), rows func() [][]s
 	// Effect 1: Handle Sorting and Initial Render
 	// This only re-runs when data or sort criteria change, NOT on scroll.
 	reactive.CreateEffect(func() {
-		sr := rows()
-		sc := sortCol()
-		asc := sortAsc()
+		sr := s.Rows()
+		sc := s.SortCol()
+		asc := s.SortAsc()
 		ready := tbodyReady()
 
 		if sc != -1 {
@@ -87,7 +87,7 @@ func Table(columns func() []string, setColumns func([]string), rows func() [][]s
 		}),
 		el.Table(
 			el.Dynamic(func() el.Node {
-				cols := columns()
+				cols := s.Columns()
 				ths := make([]any, len(cols))
 				for i, col := range cols {
 					idx := i
@@ -95,11 +95,11 @@ func Table(columns func() []string, setColumns func([]string), rows func() [][]s
 						el.Text(col),
 						el.Attr("draggable", "true"),
 						el.OnClick(func(e dom.Event) {
-							if sortCol() == idx {
-								setSortAsc(!sortAsc())
+							if s.SortCol() == idx {
+								s.SetSortAsc(!s.SortAsc())
 							} else {
-								setSortCol(idx)
-								setSortAsc(true)
+								s.SetSortCol(idx)
+								s.SetSortAsc(true)
 							}
 						}),
 						el.On("dragstart", func(e dom.Event) {
@@ -114,21 +114,21 @@ func Table(columns func() []string, setColumns func([]string), rows func() [][]s
 							from := draggedIdx()
 							to := idx
 							if from != -1 && from != to {
-								newCols := reorder(cols, from, to)
-								r := rows()
+								newCols := state.Reorder(cols, from, to)
+								r := s.Rows()
 								newRows := make([][]string, len(r))
 								for j, row := range r {
-									newRows[j] = reorder(row, from, to)
+									newRows[j] = state.Reorder(row, from, to)
 								}
-								setColumns(newCols)
-								setRows(newRows)
-								setSortCol(-1)
+								s.SetColumns(newCols)
+								s.SetRows(newRows)
+								s.SetSortCol(-1)
 							}
 							setDraggedIdx(-1)
 						}),
-						el.Show(func() bool { return sortCol() == idx },
+						el.Show(func() bool { return s.SortCol() == idx },
 							el.Span(el.Class("sort-icon"), el.DynText(func() string {
-								if sortAsc() {
+								if s.SortAsc() {
 									return "↑"
 								}
 								return "↓"
@@ -156,16 +156,4 @@ func appendRows(parent dom.Element, rows [][]string) {
 		}
 		parent.AppendChild(tr)
 	}
-}
-
-func reorder[T any](s []T, from, to int) []T {
-	if from == to {
-		return s
-	}
-	res := make([]T, len(s))
-	copy(res, s)
-	val := res[from]
-	res = append(res[:from], res[from+1:]...)
-	res = append(res[:to], append([]T{val}, res[to:]...)...)
-	return res
 }

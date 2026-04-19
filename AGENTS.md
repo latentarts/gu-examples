@@ -36,11 +36,61 @@ This document provides rules and guidelines for AI agents working on the `gu-exa
 -   **`jsutil`**: Provides logging (`LogInfo`, `LogDebug`, etc.), timing (`SetTimeout`, `SetInterval`), and JS promise helpers (`Await`).
 -   **`dom`**: Low-level access to the DOM and event objects.
 
+## Recommended Project Structure
+
+To maintain scalability and avoid import cycles, all new examples should follow this layered architecture:
+
+```text
+example-name/
+├── main.go          # Entry point (package main), mounts the App
+├── styles.go        # Global CSS (package main)
+├── index.html       # HTML entry point
+├── Makefile         # Build/Serve commands
+├── app/
+│   └── app.go       # App orchestration (package app), imports components and state
+├── components/      # UI components (package components), imports state
+│   ├── table.go
+│   └── uploader.go
+└── state/           # State & Business Logic (package state), NO UI dependencies
+    ├── state.go     # ReportingState, Signals
+    └── logic.go     # Pure functions, data processing
+```
+
+### Layer Responsibilities
+
+1.  **State Layer (`state/`)**:
+    -   Contains the `ReportingState` struct (or equivalent).
+    -   Manages all reactive signals and state transition methods.
+    -   Houses pure business logic and data processing functions.
+    -   **Constraint**: Must NOT import `el` or `dom` packages. This layer is UI-agnostic.
+
+2.  **Component Layer (`components/`)**:
+    -   Contains reusable UI components (e.g., `Table`, `Uploader`).
+    -   Declares UI structure using the `el` package.
+    -   Imports the `state` package to access reactive data and trigger transitions.
+
+3.  **App Layer (`app/`)**:
+    -   Orchestrates the high-level layout.
+    -   Composes components together.
+    -   Initializes the `state` container.
+
+4.  **Root Layer (`package main`)**:
+    -   `main.go`: The Wasm entry point.
+    -   `styles.go`: Global CSS definitions to keep the application code clean.
+
 ## Rules for Adding New Examples
 
 1.  **Pure Go Focus:** Implement logic and UI in Go. Avoid JavaScript unless strictly required for interop or external libraries.
 2.  **Isolated Directory:** Each example must reside in its own subdirectory with a `go.mod`, `index.html`, `main.go`, and `Makefile`.
-3.  **Comprehensive README:** Every example MUST include a `README.md` containing:
+3.  **Mandatory Testing:** Every example MUST include unit tests for its layers (state, logic, components, app). 
+    -   Tests using `CreateEffect` or other reactive primitives MUST be wrapped in `reactive.CreateRoot`.
+4.  **Makefile Targets:** The `Makefile` MUST include a `test` target that runs the WASM tests using the Go WASM runner:
+    ```makefile
+    test:
+    	@echo "Running WASM tests..."
+    	PATH=$(PATH):$(GOROOT)/lib/wasm GOOS=js GOARCH=wasm go test ./...
+    ```
+5.  **Comprehensive README:** Every example MUST include a `README.md` containing:
     -   **Purpose:** What the example does.
     -   **How it Works:** Technical explanation of the implementation.
     -   **gu Implementation Details:** Code snippets showing how `gu` (signals, memos, elements) was used.
