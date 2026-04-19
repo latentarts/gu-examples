@@ -5,6 +5,7 @@ DIST       := dist
 .PHONY: build tinygo serve tinygo-serve clean
 
 build:
+	go mod tidy
 	@mkdir -p $(DIST)
 	GOOS=js GOARCH=wasm go build -ldflags="-s -w" -o $(DIST)/main.wasm .
 	cp index.html $(DIST)/index.html
@@ -13,6 +14,7 @@ build:
 	@ls -lh $(DIST)/main.wasm | awk '{print "WASM size:", $$5}'
 
 tinygo:
+	go mod tidy
 	@mkdir -p $(DIST)
 	tinygo build -target=wasm -opt=z -no-debug -o $(DIST)/main.wasm .
 	cp index.html $(DIST)/index.html
