@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>gu + DuckDB WASM — SQL Explorer</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            body {
+                font-family: var(--gu-font-family, system-ui, sans-serif);
+                background: var(--gu-color-background, #0f172a);
+                color: var(--gu-color-text-primary, #e2e8f0);
+                line-height: var(--gu-line-height, 1.5);
+            }
+            .app {
+                max-width: 960px;
+                margin: 0 auto;
+                padding: 2rem;
+            }
+            h1 {
+                color: #f59e0b;
+                margin-bottom: 0.5rem;
+            }
+            .subtitle {
+                color: #94a3b8;
+                margin-bottom: 1.5rem;
+            }
+            textarea {
+                width: 100%;
+                min-height: 100px;
+                padding: 0.75rem;
+                font-family: var(
+                    --gu-font-family-mono,
+                    ui-monospace,
+                    monospace
+                );
+                font-size: 0.875rem;
+                border: 1px solid #334155;
+                border-radius: 0.5rem;
+                background: #1e293b;
+                color: #e2e8f0;
+                resize: vertical;
+            }
+            textarea:focus {
+                outline: none;
+                border-color: #f59e0b;
+            }
+            .toolbar {
+                display: flex;
+                gap: 0.5rem;
+                margin: 0.75rem 0;
+                align-items: center;
+            }
+            button {
+                padding: 0.5rem 1.25rem;
+                border: none;
+                border-radius: 0.375rem;
+                background: #f59e0b;
+                color: #0f172a;
+                font-weight: 600;
+                font-size: 0.875rem;
+                cursor: pointer;
+                transition: opacity 0.15s;
+            }
+            button:hover {
+                opacity: 0.85;
+            }
+            button:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+            .status {
+                font-size: 0.8rem;
+                color: #94a3b8;
+            }
+            .error {
+                padding: 0.75rem;
+                margin: 0.75rem 0;
+                border-radius: 0.375rem;
+                background: #7f1d1d;
+                color: #fca5a5;
+                font-size: 0.875rem;
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-top: 1rem;
+                font-size: 0.875rem;
+            }
+            th {
+                text-align: left;
+                padding: 0.5rem 0.75rem;
+                background: #1e293b;
+                border-bottom: 2px solid #f59e0b;
+                color: #f59e0b;
+                font-weight: 600;
+                position: sticky;
+                top: 0;
+            }
+            td {
+                padding: 0.5rem 0.75rem;
+                border-bottom: 1px solid #1e293b;
+            }
+            tr:hover td {
+                background: #1e293b44;
+            }
+            .results {
+                max-height: 500px;
+                overflow: auto;
+                border-radius: 0.5rem;
+            }
+            .loading-spinner {
+                display: inline-block;
+                animation: spin 1s linear infinite;
+            }
+            @keyframes spin {
+                to {
+                    transform: rotate(360deg);
+                }
+            }
+        </style>
+
+        <script type="importmap">
+            {
+                "imports": {
+                    "@duckdb/duckdb-wasm": "https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.29.0/+esm"
+                }
+            }
+        </script>
+
+        <script src="wasm_exec.js"></script>
+        <script type="module">
+            import * as duckdb from "@duckdb/duckdb-wasm";
+
+            window.App = { ready: false };
+
+            (async () => {
+                console.log("DuckDB initializing...");
+                try {
+                    const bundles = duckdb.getJsDelivrBundles();
+                    const bundle = await duckdb.selectBundle(bundles);
+
+                    const worker_url = URL.createObjectURL(
+                        new Blob([`importScripts("${bundle.mainWorker}");`], {
+                            type: "text/javascript",
+                        }),
+                    );
+                    const worker = new Worker(worker_url);
+                    const logger = new duckdb.ConsoleLogger();
+                    const db = new duckdb.AsyncDuckDB(logger, worker);
+                    await db.instantiate(bundle.mainModule);
+                    URL.revokeObjectURL(worker_url);
+
+                    const conn = await db.connect();
+
+                    // Seed sample data
+                    await conn.query(`
+                    CREATE TABLE sales AS
+                    SELECT
+                        i AS id,
+                        'Product ' || chr(CAST(65 + (i % 26) AS INTEGER)) AS product,
+                        CASE i % 5
+                            WHEN 0 THEN 'Electronics'
+                            WHEN 1 THEN 'Clothing'
+                            WHEN 2 THEN 'Food'
+                            WHEN 3 THEN 'Books'
+                            ELSE 'Home'
+                        END AS category,
+                        round(random() * 500 + 10, 2) AS price,
+                        (i % 50) + 1 AS quantity,
+                        DATE '2024-01-01' + INTERVAL (i % 365) DAY AS sale_date
+                    FROM generate_series(1, 1000) t(i)
+                `);
+
+                    window.App.query = async function (sql) {
+                        console.log("Executing SQL:", sql);
+                        const result = await conn.query(sql);
+                        const columns = result.schema.fields.map((f) => f.name);
+                        const rows = [];
+                        for (let i = 0; i < result.numRows; i++) {
+                            const row = [];
+                            for (let j = 0; j < columns.length; j++) {
+                                const val = result.getChildAt(j).get(i);
+                                row.push(val === null ? "NULL" : String(val));
+                            }
+                            rows.push(row);
+                        }
+                        return JSON.stringify({ columns, rows });
+                    };
+
+                    window.App.ready = true;
+                    console.log("DuckDB ready");
+                    if (window.App.onReady) window.App.onReady();
+                } catch (e) {
+                    console.error("DuckDB init failed:", e);
+                    if (window.App.onError) window.App.onError(e.message);
+                }
+
+                // Start Go after window.App is defined
+                console.log("Starting WASM...");
+                const go = new Go();
+                WebAssembly.instantiateStreaming(
+                    fetch("main.wasm"),
+                    go.importObject,
+                ).then((result) => {
+                    console.log("WASM instantiated");
+                    return go.run(result.instance);
+                }).catch(err => console.error("WASM failed:", err));
+            })();
+        </script>
+    </head>
+    <body>
+        <div id="app"></div>
+    </body>
+</html>

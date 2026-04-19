@@ -1,0 +1,4 @@
+# Written by `gu dev` / `gu build` from the embedded WASM debug bundle in the gu CLI.
+/debug_boot.js
+/debug_console.js
+/debug_console.html

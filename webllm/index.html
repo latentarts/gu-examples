@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>gu + WebLLM — Advanced Chat</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+    
+    <style type="text/tailwindcss">
+        @theme {
+            --color-brand: #22d3ee;
+            --color-surface: #0c0c0f;
+        }
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        .thinking-shimmer {
+            background: linear-gradient(90deg, #27272a 0%, #3f3f46 50%, #27272a 100%);
+            background-size: 200% 100%;
+            animation: shimmer 2s ease-in-out infinite;
+        }
+        @keyframes pulse-dot {
+            0%, 80%, 100% { opacity: 0.35; transform: scale(0.85); }
+            40% { opacity: 1; transform: scale(1); }
+        }
+        .thinking-dot { animation: pulse-dot 1.2s ease-in-out infinite; }
+        .thinking-dot:nth-child(2) { animation-delay: 0.2s; }
+        .thinking-dot:nth-child(3) { animation-delay: 0.4s; }
+        .prose-chat {
+            font-size: 0.9375rem;
+            line-height: 1.65;
+        }
+        .prose-chat pre { margin: 0.75rem 0; border-radius: 0.5rem; overflow-x: auto; padding: 1rem; background: #18181b !important; }
+        .prose-chat code { font-size: 0.8125rem; }
+        .prose-chat p { margin: 0.5rem 0; }
+        .prose-chat ul, .prose-chat ol { margin: 0.5rem 0; padding-left: 1.25rem; }
+        .prose-chat a { color: #22d3ee; text-decoration: underline; text-underline-offset: 2px; }
+    </style>
+
+    <script>
+        (function () {
+            const purifyCfg = {
+                ADD_TAGS: ['use'],
+                ADD_ATTR: ['class', 'target', 'rel', 'href', 'colspan', 'rowspan'],
+            };
+            if (typeof marked !== 'undefined' && typeof hljs !== 'undefined') {
+                marked.setOptions({
+                    gfm: true,
+                    breaks: true,
+                    highlight: function (code, lang) {
+                        try {
+                            if (lang && hljs.getLanguage(lang)) {
+                                return hljs.highlight(code, { language: lang }).value;
+                            }
+                            return hljs.highlightAuto(code).value;
+                        } catch {
+                            return code;
+                        }
+                    },
+                });
+            }
+            window.Markdown = {
+                render: function (md) {
+                    if (!md) return '';
+                    const raw = marked.parse(md);
+                    return DOMPurify.sanitize(raw, purifyCfg);
+                },
+            };
+        })();
+    </script>
+
+    <script src="wasm_exec.js"></script>
+    <script type="module">
+        import { CreateMLCEngine, prebuiltAppConfig } from "https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm/+esm";
+
+        window.App = {
+            engine: null,
+            currentModelId: null,
+            onProgress: null,
+        };
+
+        window.App.initEngine = async function(modelId) {
+            console.log("App.initEngine starting for:", modelId);
+            
+            if (window.App.engine && window.App.currentModelId === modelId) {
+                console.log("Model already loaded, skipping init");
+                return;
+            }
+            
+            if (window.App.engine) {
+                console.log("Unloading previous engine...");
+                await window.App.engine.unload();
+            }
+
+            const progressCb = (progress) => {
+                const text = progress.text || `Loading: ${Math.round((progress.progress || 0) * 100)}%`;
+                console.log("JS Progress:", text);
+                if (window.App.onProgress) {
+                    window.App.onProgress(text);
+                }
+            };
+
+            const appConfig = {
+                model_list: [
+                    ...prebuiltAppConfig.model_list,
+                    {
+                        "model": "https://huggingface.co/mlc-ai/SmolLM2-360M-Instruct-q4f32_1-MLC",
+                        "model_id": "SmolLM2-360M-Instruct-q4f32_1-MLC",
+                        "model_lib": "https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/web-llm-models/v0_2_80/SmolLM2-360M-Instruct-q4f32_1-ctx4k_cs1k-webgpu.wasm",
+                    },
+                    {
+                        "model": "https://huggingface.co/mlc-ai/Llama-3.2-1B-Instruct-q4f32_1-MLC",
+                        "model_id": "Llama-3.2-1B-Instruct-q4f32_1-MLC",
+                        "model_lib": "https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/web-llm-models/v0_2_80/Llama-3.2-1B-Instruct-q4f32_1-ctx4k_cs1k-webgpu.wasm",
+                    },
+                    {
+                        "model": "https://huggingface.co/mlc-ai/Phi-3.5-mini-instruct-q4f32_1-MLC",
+                        "model_id": "Phi-3.5-mini-instruct-q4f32_1-MLC",
+                        "model_lib": "https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/web-llm-models/v0_2_80/Phi-3.5-mini-instruct-q4f32_1-ctx4k_cs1k-webgpu.wasm",
+                    }
+                ]
+            };
+
+            console.log("Calling CreateMLCEngine...");
+            const engine = await CreateMLCEngine(modelId, {
+                initProgressCallback: progressCb,
+                appConfig: appConfig,
+            });
+            
+            console.log("Engine created successfully");
+            window.App.engine = engine;
+            window.App.currentModelId = modelId;
+        };
+
+        window.App.chat = async function(messagesJSON, onToken) {
+            console.log("App.chat starting stream...");
+            const messages = JSON.parse(messagesJSON);
+            const asyncChunkGenerator = await window.App.engine.chat.completions.create({
+                messages: messages,
+                max_tokens: 1024,
+                stream: true,
+            });
+
+            let fullText = "";
+            for await (const chunk of asyncChunkGenerator) {
+                const content = chunk.choices[0]?.delta?.content;
+                if (content) {
+                    fullText += content;
+                    onToken(fullText);
+                }
+            }
+            console.log("App.chat stream finished");
+            return fullText;
+        };
+
+        // Start Go
+        const go = new Go();
+        WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject)
+            .then(result => go.run(result.instance));
+    </script>
+</head>
+<body class="bg-[#0c0c0f] text-zinc-100 antialiased min-h-screen">
+    <div id="app"></div>
+</body>
+</html>

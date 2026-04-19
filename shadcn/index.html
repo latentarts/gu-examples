@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>gu — shadcn/ui Component Migration</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+        @theme {
+            --font-sans: ui-sans-serif, system-ui, -apple-system, sans-serif;
+        }
+        /* Prevent body scroll when drawer is open */
+        body.drawer-open { overflow: hidden; }
+    </style>
+    <script src="wasm_exec.js"></script>
+    <script>
+        const go = new Go();
+        WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject)
+            .then(result => go.run(result.instance));
+    </script>
+</head>
+<body>
+    <div id="app"></div>
+</body>
+</html>

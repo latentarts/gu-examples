@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>gu + Tailwind CSS — Component Showcase</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style type="text/tailwindcss">
+        @theme {
+            --color-brand: #6366f1;
+            --color-brand-light: #818cf8;
+            --color-brand-dark: #4338ca;
+            --color-accent: #f59e0b;
+        }
+    </style>
+    <script src="wasm_exec.js"></script>
+    <script>
+        const go = new Go();
+        WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject)
+            .then(result => go.run(result.instance));
+    </script>
+</head>
+<body>
+    <div id="app"></div>
+</body>
+</html>
