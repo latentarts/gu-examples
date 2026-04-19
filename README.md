@@ -63,7 +63,7 @@ The following examples demonstrate various technical aspects and integration cap
 ### 6. Reporting Dashboard (`/reporting`)
 *   **Purpose:** A data-heavy dashboard with tables and file uploads.
 *   **Technical Highlights:**
-    *   **Table Patterns:** Demonstrates efficient rendering of large datasets in tables.
+    *   **Table Patterns:** Demonstrates efficient rendering of large datasets in tables. Tested with over **1M** record files. 
     *   **File API:** Handling browser file uploads (`input[type=file]`) via Go/WASM.
 
 ![Watch demo](./assets/reporting.gif)
