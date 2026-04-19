@@ -3,3 +3,4 @@ tmp/
 temp/
 **/.cache
 .codex
+.claude
