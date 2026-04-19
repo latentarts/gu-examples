@@ -97,6 +97,9 @@ The following examples demonstrate various technical aspects and integration cap
     *   **Modern Browser APIs:** Direct interop with the WebGPU API for high-performance graphics.
     *   **Frame Loops:** Managing animation frames (`requestAnimationFrame`) within the Go lifecycle.
 
+> [!IMPORTANT]
+> This example should be run in **Google Chrome**. You must enable the **WebGPU** related flags (including **Unsafe WebGPU** and **WebGPU Interop**) in `chrome://flags` for it to function correctly.
+
 ![Watch demo](./assets/webgpu.gif)
 
 ### 11. WebLLM Chat (`/webllm`)
