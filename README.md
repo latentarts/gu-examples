@@ -1,6 +1,6 @@
 # gu Examples
 
-This repository contains a collection of example applications built using the **gu** framework. `gu` is a reactive Go framework designed for building modern web applications with WebAssembly (WASM), providing a declarative API for DOM manipulation and efficient reactive state management.
+This repository contains a collection of example applications built using the **[gu](https://github.com/latentarts/gu)** framework. `gu` is a reactive Go framework designed for building modern web applications with WebAssembly (WASM), providing a declarative API for DOM manipulation and efficient reactive state management.
 
 ## 🚀 Getting Started
 
