@@ -1,0 +1,19 @@
+[package]
+name = "nodegraph-tauri"
+version = "0.1.0"
+description = "Tauri shell for the gu node graph example"
+authors = ["latentarts"]
+edition = "2021"
+
+[lib]
+name = "nodegraph_tauri_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+
+[features]
+default = []

@@ -1,0 +1,14 @@
+{
+  "name": "nodegraph-tauri",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "wasm": "make wasm",
+    "tauri:dev": "make tauri-dev",
+    "tauri:build": "make tauri-build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}

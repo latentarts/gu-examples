@@ -110,6 +110,18 @@ The following examples demonstrate various technical aspects and integration cap
 
 ![Watch demo](./assets/webllm.gif)
 
+### 12. Node Graph Desktop (`/nodegraph-desktop`)
+*   **Purpose:** Native desktop wrapper around the node graph example using `webview_go`.
+*   **Technical Highlights:**
+    *   **Embedded Wasm Assets:** Packages `index.html`, `wasm_exec.js`, and `main.wasm` into a native binary.
+    *   **Loopback Hosting:** Serves the frontend over a local HTTP server to a system webview.
+
+### 13. Node Graph Tauri (`/nodegraph-tauri`)
+*   **Purpose:** Native desktop wrapper around the node graph example using Tauri.
+*   **Technical Highlights:**
+    *   **Desktop Packaging:** Uses Tauri as a native shell for the Wasm frontend.
+    *   **Shared Frontend Pattern:** Reuses the same Go Wasm app structure while swapping only the host runtime.
+
 ---
 
 ## 🛠 Framework Core Concepts
