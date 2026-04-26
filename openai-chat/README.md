@@ -2,6 +2,8 @@
 
 Browser-based chat client for OpenAI-compatible `/v1/chat/completions` APIs, built with `gu` and Go WASM. It stores the base URL, API key, model selection, and system prompt locally in the browser, streams responses token-by-token, and exposes reasoning content when the upstream model returns it.
 
+This example talks to the API directly from the browser. The upstream endpoint therefore must be reachable from browser JavaScript, allow CORS for the page origin, and handle any required `OPTIONS` preflight. If it does not, use a same-origin proxy.
+
 ## Purpose
 
 This example demonstrates how to build a fully local chat UI in Go that talks directly to an OpenAI-style HTTP API from the browser. It is useful for testing self-hosted, proxy, or third-party providers that implement the chat completions and models endpoints.
@@ -54,3 +56,10 @@ make serve
 ```
 
 Open the local server printed by the Makefile, enter a compatible base URL and API key, then start chatting.
+
+If the UI reports `Failed to fetch`, the request was blocked before any HTTP response came back. The most common causes are:
+
+- The API does not allow CORS from your page origin.
+- The API rejects the browser's `OPTIONS` preflight for the `Authorization` header.
+- The page is served over `https://` but the API URL is `http://`.
+- The API host, port, or TLS certificate is not reachable from the browser.

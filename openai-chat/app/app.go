@@ -1,7 +1,8 @@
+//go:build js && wasm
+
 package app
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -10,88 +11,26 @@ import (
 
 	"github.com/latentart/gu/dom"
 	"github.com/latentart/gu/el"
-	"github.com/latentart/gu/jsutil"
 	"github.com/latentart/gu/reactive"
 	"github.com/latentarts/gu-examples/openai-chat/components"
 	"github.com/latentarts/gu-examples/openai-chat/state"
 )
 
 func App(styles el.Node) el.Node {
-	store := jsutil.LocalStorage()
-	baseURL, setBaseURL := reactive.NewSignal(store.Get(state.StorageKeyURL))
-	if baseURL() == "" {
-		setBaseURL("https://api.openai.com/v1")
-	}
-	apiKey, setAPIKey := reactive.NewSignal(store.Get(state.StorageKeyKey))
-	model, setModel := reactive.NewSignal(store.Get(state.StorageKeyModel))
-	if model() == "" {
-		setModel("gpt-4o-mini")
-	}
-	systemPrompt, setSystemPrompt := reactive.NewSignal(store.Get(state.StorageKeySystem))
-	if systemPrompt() == "" {
-		setSystemPrompt("You are a helpful assistant.")
-	}
-	showSettings, setShowSettings := reactive.NewSignal(false)
-
-	var modelOptions []string
-	if store.Get(state.StorageKeyModelIDsForURL) == strings.TrimSpace(baseURL()) {
-		if raw := store.Get(state.StorageKeyModelIDs); raw != "" {
-			var ids []string
-			if err := json.Unmarshal([]byte(raw), &ids); err == nil && len(ids) > 0 {
-				modelOptions = ids
-			}
-		}
-	}
-	modelsVer, setModelsVer := reactive.NewSignal(0)
-	if len(modelOptions) > 0 {
-		setModelsVer(1)
-	}
-	modelsLoading, setModelsLoading := reactive.NewSignal(false)
-	modelsErr, setModelsErr := reactive.NewSignal("")
-	msgVer, setMsgVer := reactive.NewSignal(0)
-	listLen, setListLen := reactive.NewSignal(0)
-	var messages []state.ChatMsg
-	generating, setGenerating := reactive.NewSignal(false)
-	errMsg, setErrMsg := reactive.NewSignal("")
+	s := state.NewChatState()
+	
 	var chatList dom.Element
 	var composerInput dom.Element
 
-	persist := func() {
-		store.Set(state.StorageKeyURL, baseURL())
-		store.Set(state.StorageKeyKey, apiKey())
-		store.Set(state.StorageKeyModel, model())
-		store.Set(state.StorageKeySystem, systemPrompt())
-	}
-
-	persistModelIDCache := func() {
-		if len(modelOptions) == 0 {
-			store.Remove(state.StorageKeyModelIDs)
-			store.Remove(state.StorageKeyModelIDsForURL)
-			return
-		}
-		raw, err := json.Marshal(modelOptions)
-		if err != nil {
-			return
-		}
-		store.Set(state.StorageKeyModelIDs, string(raw))
-		store.Set(state.StorageKeyModelIDsForURL, strings.TrimSpace(baseURL()))
-	}
-
-	appendAssistantPlaceholder := func() {
-		messages = append(messages, state.ChatMsg{Role: "assistant", Streaming: true, Timestamp: state.NowTimestamp()})
-		setMsgVer(msgVer() + 1)
-		setListLen(len(messages))
-	}
-
 	updateLastAssistant := func(thinking, content string, done bool, tft, tps, duration, modelName string) {
-		if len(messages) == 0 {
+		if len(s.Messages) == 0 {
 			return
 		}
-		last := len(messages) - 1
-		if messages[last].Role != "assistant" {
+		last := len(s.Messages) - 1
+		if s.Messages[last].Role != "assistant" {
 			return
 		}
-		m := messages[last]
+		m := s.Messages[last]
 		m.Thinking = thinking
 		m.Content = content
 		m.Streaming = !done
@@ -99,44 +38,44 @@ func App(styles el.Node) el.Node {
 		m.TPS = tps
 		m.Duration = duration
 		m.Model = modelName
-		messages[last] = m
-		setMsgVer(msgVer() + 1)
+		s.Messages[last] = m
+		s.SetMsgVer(s.MsgVer() + 1)
 	}
 
-	input, setInput := reactive.NewSignal("")
-
 	send := func() {
-		setErrMsg("")
-		text := input()
-		if text == "" || generating() {
+		s.SetErrMsg("")
+		text := s.Input()
+		if text == "" || s.Generating() {
 			return
 		}
-		setInput("")
+		s.SetInput("")
 		if !composerInput.IsNull() {
 			composerInput.SetProperty("value", "")
 			composerInput.Focus()
 		}
-		messages = append(messages, state.ChatMsg{Role: "user", Content: text, Timestamp: state.NowTimestamp()})
-		appendAssistantPlaceholder()
+		s.Messages = append(s.Messages, state.ChatMsg{Role: "user", Content: text, Timestamp: state.NowTimestamp()})
+		s.Messages = append(s.Messages, state.ChatMsg{Role: "assistant", Streaming: true, Timestamp: state.NowTimestamp()})
+		s.SetMsgVer(s.MsgVer() + 1)
+		s.SetListLen(len(s.Messages))
 
-		history := make([]state.APIMessage, 0, len(messages)+1)
-		if sys := strings.TrimSpace(systemPrompt()); sys != "" {
+		history := make([]state.APIMessage, 0, len(s.Messages)+1)
+		if sys := strings.TrimSpace(s.SystemPrompt()); sys != "" {
 			history = append(history, state.APIMessage{Role: "system", Content: sys})
 		}
-		for _, m := range messages {
+		for _, m := range s.Messages {
 			if m.Role == "assistant" && m.Streaming {
 				continue
 			}
 			history = append(history, state.APIMessage{Role: m.Role, Content: m.Content})
 		}
 
-		setGenerating(true)
-		modelName := model()
+		s.SetGenerating(true)
+		modelName := s.Model()
 		go func() {
-			chatURL, err := state.NormalizeChatCompletionsURL(baseURL())
+			chatURL, err := state.NormalizeChatCompletionsURL(s.BaseURL())
 			if err != nil {
-				setErrMsg(err.Error())
-				setGenerating(false)
+				s.SetErrMsg(err.Error())
+				s.SetGenerating(false)
 				return
 			}
 			thinking := strings.Builder{}
@@ -145,7 +84,7 @@ func App(styles el.Node) el.Node {
 			var firstTokenTime time.Time
 			tokenCount := 0
 
-			err = state.StreamChat(chatURL, apiKey(), modelName, history, func(rDelta, cDelta string) bool {
+			err = state.StreamChat(chatURL, s.APIKey(), modelName, history, func(rDelta, cDelta string) bool {
 				if firstTokenTime.IsZero() && (rDelta != "" || cDelta != "") {
 					firstTokenTime = time.Now()
 				}
@@ -168,11 +107,11 @@ func App(styles el.Node) el.Node {
 				if !firstTokenTime.IsZero() {
 					tft = fmt.Sprintf("%.2fs", firstTokenTime.Sub(startTime).Seconds())
 				}
-				updateLastAssistant(strings.TrimSpace(th), strings.TrimSpace(co), false, tft, "", "", modelName)
+				updateLastAssistant(th, co, false, tft, "", "", modelName)
 				return true
 			})
 			if err != nil {
-				setErrMsg(err.Error())
+				s.SetErrMsg(err.Error())
 			}
 			endTime := time.Now()
 			duration := endTime.Sub(startTime).Seconds()
@@ -190,9 +129,9 @@ func App(styles el.Node) el.Node {
 				th = th + "\n" + extraTh
 				co = rest
 			}
-			updateLastAssistant(strings.TrimSpace(th), strings.TrimSpace(co), true, tft, tps, fmt.Sprintf("%.2fs", duration), modelName)
+			updateLastAssistant(th, co, true, tft, tps, fmt.Sprintf("%.2fs", duration), modelName)
 			js.Global().Set("__openaiChatAbort", js.Undefined())
-			setGenerating(false)
+			s.SetGenerating(false)
 		}()
 	}
 
@@ -205,46 +144,46 @@ func App(styles el.Node) el.Node {
 
 	clearChat := func() {
 		stop()
-		messages = nil
-		setMsgVer(msgVer() + 1)
-		setListLen(0)
-		setErrMsg("")
-		setInput("")
+		s.Messages = nil
+		s.SetMsgVer(s.MsgVer() + 1)
+		s.SetListLen(0)
+		s.SetErrMsg("")
+		s.SetInput("")
 	}
 
 	loadModels := func() {
-		u := strings.TrimSpace(baseURL())
+		u := strings.TrimSpace(s.BaseURL())
 		if u == "" {
-			setModelsErr("Enter the API URL first.")
+			s.SetModelsErr("Enter the API URL first.")
 			return
 		}
 		modelsURL, err := state.DeriveModelsEndpoint(u)
 		if err != nil {
-			setModelsErr(err.Error())
+			s.SetModelsErr(err.Error())
 			return
 		}
 		go func() {
-			setModelsLoading(true)
-			setModelsErr("")
-			ids, err := state.FetchModelsList(modelsURL, apiKey())
-			setModelsLoading(false)
+			s.SetModelsLoading(true)
+			s.SetModelsErr("")
+			ids, err := state.FetchModelsList(modelsURL, s.APIKey())
+			s.SetModelsLoading(false)
 			if err != nil {
-				setModelsErr(err.Error())
-				modelOptions = nil
-				persistModelIDCache()
+				s.SetModelsErr(err.Error())
+				s.ModelOptions = nil
+				s.PersistModelIDCache()
 			} else {
-				modelOptions = ids
-				persistModelIDCache()
+				s.ModelOptions = ids
+				s.PersistModelIDCache()
 			}
-			setModelsVer(modelsVer() + 1)
+			s.SetModelsVer(s.ModelsVer() + 1)
 		}()
 	}
-
-	persist()
 
 	return el.Div(
 		styles,
 		el.Class("h-screen flex flex-col bg-[#0c0c0f] text-zinc-100"),
+		
+		// Header
 		el.Div(
 			el.Class("shrink-0 border-b border-zinc-800/80 backdrop-blur-sm bg-[#0c0c0f]/90 z-20"),
 			el.Div(
@@ -256,28 +195,27 @@ func App(styles el.Node) el.Node {
 				),
 				el.Div(
 					el.Class("flex items-center gap-2 shrink-0 relative z-20"),
-					el.Button(el.Type("button"), el.Class("text-xs px-3 py-1.5 rounded-lg border border-zinc-700 text-zinc-300 hover:bg-zinc-800/80 transition-colors"), el.Text("Settings"), el.OnClick(func(dom.Event) { setShowSettings(!showSettings()) })),
-					el.Button(el.Type("button"), el.Class("text-xs px-3 py-1.5 rounded-lg border border-zinc-700 text-zinc-400 hover:text-red-400 hover:border-red-900/50 transition-colors"), el.Text("Clear"), el.OnClick(func(dom.Event) { clearChat() })),
+					el.Button(el.Type("button"), el.Class("text-[11px] font-medium px-3 py-1.5 rounded-lg border border-zinc-700 text-zinc-300 hover:bg-zinc-800/80 transition-colors uppercase tracking-wider"), el.Text("Settings"), el.OnClick(func(dom.Event) { s.SetShowSettings(!s.ShowSettings()) })),
+					el.Button(el.Type("button"), el.Class("text-[11px] font-medium px-3 py-1.5 rounded-lg border border-zinc-700 text-zinc-400 hover:text-red-400 hover:border-red-900/50 transition-colors uppercase tracking-wider"), el.Text("Clear"), el.OnClick(func(dom.Event) { clearChat() })),
 				),
 			),
 		),
-		el.Show(func() bool { return errMsg() != "" }, el.Div(el.Class("shrink-0 max-w-3xl mx-auto w-full px-4 pt-3"), el.Div(el.Class("text-xs rounded-lg px-3 py-2 bg-red-950/50 text-red-300 border border-red-900/40"), el.DynText(errMsg)))),
+		
+		// Error bar
+		el.Show(func() bool { return s.ErrMsg() != "" }, el.Div(el.Class("shrink-0 max-w-3xl mx-auto w-full px-4 pt-3"), el.Div(el.Class("text-xs rounded-lg px-3 py-2 bg-red-950/50 text-red-300 border border-red-900/40"), el.DynText(s.ErrMsg)))),
+		
+		// Chat List
 		el.Div(
 			el.Class("flex-1 relative min-h-0"),
 			el.Div(
-				el.Class("absolute inset-0 overflow-y-auto px-4 py-6 pb-48"),
+				el.Class("absolute inset-0 overflow-y-auto px-4 py-6 pb-48 scroll-smooth"),
 				el.Ref(&chatList),
-				el.On("scroll", func(dom.Event) {
-					if !chatList.IsNull() {
-						_ = chatList.GetProperty("scrollHeight").Int()
-					}
-				}),
 				el.Div(
 					el.Class("max-w-3xl mx-auto w-full flex flex-col gap-10"),
 					el.For(
 						func() []int {
-							_ = listLen()
-							n := len(messages)
+							_ = s.ListLen()
+							n := len(s.Messages)
 							var starts []int
 							for k := 0; k < n; k += 2 {
 								starts = append(starts, k)
@@ -285,35 +223,37 @@ func App(styles el.Node) el.Node {
 							return starts
 						},
 						func(userIdx int, _ int) string { return strconv.Itoa(userIdx) },
-						func(userIdx int, _ int) el.Node { return components.TurnGroup(userIdx, &messages, msgVer) },
+						func(userIdx int, _ int) el.Node { return components.TurnGroup(userIdx, &s.Messages, s.MsgVer) },
 					),
 				),
 				el.OnMount(func(element dom.Element) {
 					reactive.CreateEffect(func() {
-						_ = msgVer()
-						_ = generating()
+						_ = s.MsgVer()
+						_ = s.Generating()
 						scrollPos := element.GetProperty("scrollTop").Int()
 						scrollHeight := element.GetProperty("scrollHeight").Int()
 						clientHeight := element.GetProperty("clientHeight").Int()
-						if scrollHeight-scrollPos-clientHeight < 300 {
+						if scrollHeight-scrollPos-clientHeight < 400 {
 							element.SetProperty("scrollTop", scrollHeight)
 						}
 					})
 				}),
 			),
+			
+			// Composer
 			el.Div(
-				el.Class("absolute bottom-0 left-0 right-0 border-t border-zinc-800 bg-[#0c0c0f]/80 backdrop-blur-md z-10"),
+				el.Class("absolute bottom-0 left-0 right-0 border-t border-zinc-800/50 bg-gradient-to-t from-[#0c0c0f] via-[#0c0c0f]/95 to-transparent pt-12 pb-6 z-10"),
 				el.Div(
-					el.Class("max-w-3xl mx-auto w-full px-4 py-4"),
+					el.Class("max-w-3xl mx-auto w-full px-4"),
 					el.Div(
-						el.Class("flex gap-2 items-end"),
+						el.Class("relative flex gap-3 items-end bg-zinc-900/80 backdrop-blur-sm border border-zinc-800 rounded-2xl p-2 shadow-2xl"),
 						el.Textarea(
-							el.Class("flex-1 min-h-[48px] max-h-40 resize-y bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-cyan-500/30 leading-relaxed"),
+							el.Class("flex-1 min-h-[44px] max-h-40 resize-none bg-transparent border-none px-3 py-2.5 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none leading-relaxed"),
 							el.Ref(&composerInput),
-							el.Placeholder("Message…"),
-							el.Attr("rows", "2"),
-							el.DynProp("value", func() any { return input() }),
-							el.OnInput(func(e dom.Event) { setInput(e.TargetValue()) }),
+							el.Placeholder("Ask anything…"),
+							el.Attr("rows", "1"),
+							el.DynProp("value", func() any { return s.Input() }),
+							el.OnInput(func(e dom.Event) { s.SetInput(e.TargetValue()) }),
 							el.OnKeyDown(func(e dom.Event) {
 								if e.Key() == "Enter" && !e.Value.Get("shiftKey").Bool() {
 									e.PreventDefault()
@@ -323,61 +263,34 @@ func App(styles el.Node) el.Node {
 						),
 						el.Button(
 							el.Type("button"),
-							el.Class("px-4 py-3 rounded-xl text-sm font-medium bg-cyan-600 hover:bg-cyan-500 text-zinc-950 transition-colors disabled:opacity-40 disabled:pointer-events-none"),
-							el.Text("Send"),
+							el.Class("w-10 h-10 shrink-0 rounded-xl flex items-center justify-center bg-cyan-600 hover:bg-cyan-500 text-zinc-950 transition-all disabled:opacity-20 disabled:grayscale disabled:pointer-events-none shadow-lg shadow-cyan-900/20"),
 							el.DynAttr("disabled", func() string {
-								if generating() || strings.TrimSpace(input()) == "" {
+								if s.Generating() || strings.TrimSpace(s.Input()) == "" {
 									return "true"
 								}
 								return ""
 							}),
 							el.OnClick(func(dom.Event) { send() }),
+							el.SVGTag("svg", el.Attr("viewBox", "0 0 24 24"), el.Attr("fill", "none"), el.Attr("stroke", "currentColor"), el.Attr("stroke-width", "2.5"), el.Class("w-5 h-5"),
+								el.SVGTag("line", el.Attr("x1", "12"), el.Attr("y1", "19"), el.Attr("x2", "12"), el.Attr("y2", "5")),
+								el.SVGTag("polyline", el.Attr("points", "5 12 12 5 19 12")),
+							),
+						),
+					),
+					el.Div(
+						el.Class("mt-3 flex justify-center"),
+						el.Div(
+							el.Class("text-[10px] text-zinc-500 font-medium flex items-center gap-3 uppercase tracking-widest"),
+							el.DynText(func() string { return s.Model() }),
+							el.Span(el.Class("w-1 h-1 rounded-full bg-zinc-800")),
+							el.Text("OpenAI API Compatible"),
 						),
 					),
 				),
 			),
 		),
-		el.Div(
-			el.Style("z-index", "100"),
-			el.DynClass(func() string {
-				if !showSettings() {
-					return "hidden"
-				}
-				return "fixed inset-0"
-			}),
-			el.Div(el.Class("absolute inset-0 bg-black/70"), el.OnClick(func(dom.Event) { setShowSettings(false) })),
-			el.Div(
-				el.Class("absolute inset-0 flex items-center justify-center p-4 pointer-events-none"),
-				el.Div(
-					el.Class("pointer-events-auto w-full max-w-lg rounded-xl border border-zinc-700/80 bg-zinc-900 shadow-2xl shadow-black/60"),
-					el.Div(
-						el.Class("px-5 py-4 border-b border-zinc-800 flex items-center justify-between gap-3"),
-						el.Div(el.Class("text-sm font-semibold text-zinc-100"), el.Text("Provider")),
-						el.Button(el.Type("button"), el.Class("text-zinc-500 hover:text-zinc-300 text-lg leading-none px-2 py-1 rounded-lg hover:bg-zinc-800"), el.Text("×"), el.OnClick(func(dom.Event) { setShowSettings(false) })),
-					),
-					el.Div(
-						el.Class("px-5 py-4 space-y-4 max-h-[min(70vh,520px)] overflow-y-auto"),
-						el.Input(el.Class("w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200"), el.Type("text"), el.DynProp("value", func() any { return baseURL() }), el.OnInput(func(e dom.Event) { setBaseURL(e.TargetValue()); persist() }), el.OnBlur(func(dom.Event) { loadModels() })),
-						el.Input(el.Class("w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200"), el.Type("password"), el.DynProp("value", func() any { return apiKey() }), el.OnInput(func(e dom.Event) { setAPIKey(e.TargetValue()); persist() }), el.OnBlur(func(dom.Event) { loadModels() })),
-						el.Textarea(el.Class("w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 min-h-[80px]"), el.DynProp("value", func() any { return systemPrompt() }), el.OnInput(func(e dom.Event) { setSystemPrompt(e.TargetValue()); persist() })),
-						el.Dynamic(func() el.Node {
-							_ = modelsVer()
-							args := []any{el.Class("space-y-2")}
-							if modelsLoading() {
-								args = append(args, el.Div(el.Class("text-xs text-zinc-500"), el.Text("Loading models...")))
-							}
-							if modelsErr() != "" {
-								args = append(args, el.Div(el.Class("text-xs text-red-400"), el.DynText(modelsErr)))
-							}
-							for _, opt := range modelOptions {
-								opt := opt
-								args = append(args, el.Button(el.Type("button"), el.Class("w-full text-left px-3 py-2 rounded-lg border border-zinc-800 hover:bg-zinc-800"), el.Text(opt), el.OnClick(func(dom.Event) { setModel(opt); persist() })))
-							}
-							return el.Div(args...)
-						}),
-					),
-				),
-			),
-		),
+		
+		// Settings
+		components.SettingsModal(s, loadModels),
 	)
 }

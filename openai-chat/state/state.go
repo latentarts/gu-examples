@@ -1,3 +1,5 @@
+//go:build js && wasm
+
 package state
 
 import (
@@ -11,6 +13,7 @@ import (
 	"time"
 
 	"github.com/latentart/gu/jsutil"
+	"github.com/latentart/gu/reactive"
 )
 
 const (
@@ -57,6 +60,139 @@ type modelsListResponse struct {
 
 var ThinkingTagRE = regexp.MustCompile(`(?s)<(?:think|thinking)>(.*?)</(?:think|thinking)>`)
 
+type ChatState struct {
+	BaseURL      func() string
+	SetBaseURL   func(string)
+	APIKey       func() string
+	SetAPIKey    func(string)
+	Model        func() string
+	SetModel     func(string)
+	SystemPrompt func() string
+	SetSystemPrompt func(string)
+	
+	ShowSettings    func() bool
+	SetShowSettings func(bool)
+	
+	ModelsLoading    func() bool
+	SetModelsLoading func(bool)
+	ModelsErr        func() bool
+	SetModelsErr     func(string)
+	ModelsVer        func() int
+	SetModelsVer     func(int)
+	ModelOptions     []string
+
+	Messages []ChatMsg
+	MsgVer   func() int
+	SetMsgVer func(int)
+	ListLen  func() int
+	SetListLen func(int)
+	
+	Generating    func() bool
+	SetGenerating func(bool)
+	ErrMsg        func() string
+	SetErrMsg     func(string)
+	
+	Input    func() string
+	SetInput func(string)
+}
+
+func NewChatState() *ChatState {
+	store := jsutil.LocalStorage()
+	
+	baseURL, setBaseURL := reactive.NewSignal(store.Get(StorageKeyURL))
+	if baseURL() == "" {
+		setBaseURL("https://api.openai.com/v1")
+	}
+	apiKey, setAPIKey := reactive.NewSignal(store.Get(StorageKeyKey))
+	model, setModel := reactive.NewSignal(store.Get(StorageKeyModel))
+	if model() == "" {
+		setModel("gpt-4o-mini")
+	}
+	systemPrompt, setSystemPrompt := reactive.NewSignal(store.Get(StorageKeySystem))
+	if systemPrompt() == "" {
+		setSystemPrompt("You are a helpful assistant.")
+	}
+	
+	showSettings, setShowSettings := reactive.NewSignal(false)
+	modelsLoading, setModelsLoading := reactive.NewSignal(false)
+	modelsErr, setModelsErr := reactive.NewSignal("")
+	modelsVer, setModelsVer := reactive.NewSignal(0)
+	
+	msgVer, setMsgVer := reactive.NewSignal(0)
+	listLen, setListLen := reactive.NewSignal(0)
+	generating, setGenerating := reactive.NewSignal(false)
+	errMsg, setErrMsg := reactive.NewSignal("")
+	input, setInput := reactive.NewSignal("")
+
+	s := &ChatState{
+		BaseURL:      baseURL,
+		SetBaseURL:   setBaseURL,
+		APIKey:       apiKey,
+		SetAPIKey:    setAPIKey,
+		Model:        model,
+		SetModel:     setModel,
+		SystemPrompt: systemPrompt,
+		SetSystemPrompt: setSystemPrompt,
+		
+		ShowSettings:    showSettings,
+		SetShowSettings: setShowSettings,
+		
+		ModelsLoading:    modelsLoading,
+		SetModelsLoading: setModelsLoading,
+		ModelsErr:        func() bool { return modelsErr() != "" },
+		SetModelsErr:     setModelsErr,
+		ModelsVer:        modelsVer,
+		SetModelsVer:     setModelsVer,
+
+		MsgVer:   msgVer,
+		SetMsgVer: setMsgVer,
+		ListLen:  listLen,
+		SetListLen: setListLen,
+		Generating:    generating,
+		SetGenerating: setGenerating,
+		ErrMsg:        errMsg,
+		SetErrMsg:     setErrMsg,
+		Input:    input,
+		SetInput: setInput,
+	}
+	
+	// Initial model options load from storage
+	if store.Get(StorageKeyModelIDsForURL) == strings.TrimSpace(baseURL()) {
+		if raw := store.Get(StorageKeyModelIDs); raw != "" {
+			var ids []string
+			if err := json.Unmarshal([]byte(raw), &ids); err == nil && len(ids) > 0 {
+				s.ModelOptions = ids
+				setModelsVer(1)
+			}
+		}
+	}
+	
+	return s
+}
+
+func (s *ChatState) Persist() {
+	store := jsutil.LocalStorage()
+	store.Set(StorageKeyURL, s.BaseURL())
+	store.Set(StorageKeyKey, s.APIKey())
+	store.Set(StorageKeyModel, s.Model())
+	store.Set(StorageKeySystem, s.SystemPrompt())
+}
+
+func (s *ChatState) PersistModelIDCache() {
+	store := jsutil.LocalStorage()
+	if len(s.ModelOptions) == 0 {
+		store.Remove(StorageKeyModelIDs)
+		store.Remove(StorageKeyModelIDsForURL)
+		return
+	}
+	raw, err := json.Marshal(s.ModelOptions)
+	if err != nil {
+		return
+	}
+	store.Set(StorageKeyModelIDs, string(raw))
+	store.Set(StorageKeyModelIDsForURL, strings.TrimSpace(s.BaseURL()))
+}
+
 func SplitThinkingFromContent(s string) (thinking, rest string) {
 	s = strings.TrimSpace(s)
 	if m := ThinkingTagRE.FindStringSubmatch(s); len(m) > 1 {
@@ -73,6 +209,51 @@ func HeadersToJSObject(h map[string]string) js.Value {
 		obj.Set(k, v)
 	}
 	return obj
+}
+
+func explainFetchFailure(targetURL string, err error) error {
+	msg := ""
+	if err != nil {
+		msg = strings.TrimSpace(err.Error())
+	}
+	if msg == "" {
+		msg = "fetch failed before an HTTP response was returned"
+	}
+	lower := strings.ToLower(msg)
+	if !strings.Contains(lower, "failed to fetch") && !strings.Contains(lower, "networkerror") {
+		return err
+	}
+
+	parsedTarget, parseErr := url.Parse(strings.TrimSpace(targetURL))
+	if parseErr != nil {
+		return fmt.Errorf("%s. The configured API URL could not be parsed: %v", msg, parseErr)
+	}
+
+	pageURL := js.Global().Get("location").Get("href").String()
+	parsedPage, _ := url.Parse(pageURL)
+	hints := []string{
+		"The browser blocked the request before any HTTP response was available.",
+	}
+	if parsedPage != nil && parsedPage.Scheme == "https" && parsedTarget.Scheme == "http" {
+		hints = append(hints, "This page is loaded over HTTPS but the API URL is HTTP, so the browser treats it as mixed content.")
+	}
+	if parsedPage != nil && parsedPage.Host != "" && parsedTarget.Host != "" && !sameOrigin(parsedPage, parsedTarget) {
+		hints = append(hints, "The API is cross-origin from this page, so the server must allow CORS and any required OPTIONS preflight.")
+	}
+	if parsedTarget.Host == "" {
+		hints = append(hints, "The API URL is missing a host.")
+	}
+	hints = append(hints, "Verify the host, port, TLS certificate, and that the API endpoint is reachable from the browser devtools Network tab.")
+	hints = append(hints, "If your provider does not expose CORS, call it through a same-origin proxy instead of directly from the browser.")
+
+	return fmt.Errorf("%s. %s", msg, strings.Join(hints, " "))
+}
+
+func sameOrigin(a, b *url.URL) bool {
+	if a == nil || b == nil {
+		return false
+	}
+	return strings.EqualFold(a.Scheme, b.Scheme) && strings.EqualFold(a.Host, b.Host)
 }
 
 func StreamChat(
@@ -95,28 +276,30 @@ func StreamChat(
 	headers := map[string]string{
 		"Content-Type":  "application/json",
 		"Accept":        "text/event-stream",
-		"Cache-Control": "no-cache",
 	}
 	if apiKey != "" {
 		headers["Authorization"] = "Bearer " + apiKey
 	}
 
+	ac := js.Global().Get("AbortController").New()
+	
+	// Create the init object for fetch
 	init := js.Global().Get("Object").New()
 	init.Set("method", "POST")
 	init.Set("body", string(raw))
 	init.Set("headers", HeadersToJSObject(headers))
+	init.Set("signal", ac.Get("signal"))
 
-	ac := js.Global().Get("AbortController").New()
-	signal := ac.Get("signal")
-	init.Set("signal", signal)
+	// Store bound abort function globally for manual interruption
+	abortFunc := ac.Get("abort").Call("bind", ac)
 	abortHolder := js.Global().Get("Object").New()
-	abortHolder.Set("abort", ac.Get("abort"))
+	abortHolder.Set("abort", abortFunc)
 	js.Global().Set("__openaiChatAbort", abortHolder)
 
 	promise := js.Global().Call("fetch", url, init)
 	respVal, err := jsutil.Await(promise)
 	if err != nil {
-		return err
+		return explainFetchFailure(url, err)
 	}
 	if !respVal.Get("ok").Bool() {
 		text, _ := jsutil.Await(respVal.Call("text"))
@@ -224,9 +407,17 @@ func NormalizeChatCompletionsURL(raw string) (string, error) {
 	if raw == "" {
 		return "", fmt.Errorf("missing base URL")
 	}
+	
+	// Add scheme if missing
 	if !strings.Contains(raw, "://") {
-		raw = "https://" + raw
+		// Use http for localhost by default, https for others
+		if strings.HasPrefix(raw, "localhost") || strings.HasPrefix(raw, "127.0.0.1") {
+			raw = "http://" + raw
+		} else {
+			raw = "https://" + raw
+		}
 	}
+	
 	u, err := url.Parse(raw)
 	if err != nil {
 		return "", fmt.Errorf("invalid URL: %w", err)
@@ -255,12 +446,14 @@ func FetchModelsList(modelsURL, apiKey string) ([]string, error) {
 	if apiKey != "" {
 		headers["Authorization"] = "Bearer " + apiKey
 	}
+	
 	init := js.Global().Get("Object").New()
 	init.Set("method", "GET")
 	init.Set("headers", HeadersToJSObject(headers))
+	
 	respVal, err := jsutil.Await(js.Global().Call("fetch", modelsURL, init))
 	if err != nil {
-		return nil, err
+		return nil, explainFetchFailure(modelsURL, err)
 	}
 	bodyVal, _ := jsutil.Await(respVal.Call("text"))
 	body := bodyVal.String()

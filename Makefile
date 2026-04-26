@@ -39,6 +39,15 @@ serve: build-launcher copy-apps copy-assets
 	@echo ""
 	@cd $(DIST) && python3 -m http.server 8080
 
+test:
+	@echo "Testing all examples..."
+	@for app in $(APPS); do \
+		echo "  Testing $$app..."; \
+		cd $$app && make test && cd ..; \
+	done
+	@echo "  Testing launcher..."
+	@cd launcher && make test && cd ..
+
 clean:
 	@for app in $(APPS); do \
 		cd $$app && make clean && cd ..; \
