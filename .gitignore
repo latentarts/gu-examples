@@ -5,3 +5,4 @@ temp/
 .codex
 .claude
 **/target/
+**/node_modules/
